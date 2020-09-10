@@ -1,6 +1,6 @@
 /**
  * Copyright (C) 2017 PolyVection UG
- * 
+ * modified for ADAU1701/1401 by Lucky1
  * 
  *
  * THIS SOFTWARE IS PROVIDED BY POLYVECTION "AS IS" AND ANY EXPRESS OR
@@ -23,14 +23,16 @@
 
 int is_name = 0;
 int is_addr = 0;
+int is_addrIncr = 0;
 int is_len = 0;
 int is_data = 0;
 
-char * name = NULL;
-char * data = NULL;
+char name[1024];
 char  buf_char[1024]; 
+char  data[65536];
 uint8_t val;
 int addr = 0;
+int addrIncr = 0;
 int len = 0;
 
 
@@ -42,13 +44,12 @@ static const struct backend_ops debug_backend_ops = {
 static const struct backend_ops *backend_ops = &debug_backend_ops;
 
 
-/*
-static void printArray(uint8_t *a, int skip, int len) {
-    for (int i = skip; i < skip+len; i++){
-	 printf("p[%d]: %02x ", i,a[i]);
-	}
+void print_values(uint8_t* val, int len){
+    for (int i = 0;i < len; i++)
+        printf("0x%02X, ",val[i]);    
 }
-*/
+
+
 
 static void
 print_element_names(xmlNode * a_node)
@@ -56,7 +57,7 @@ print_element_names(xmlNode * a_node)
 	
 	uint8_t *val;
 	size_t buf_size;
-	buf_size = 1024;
+	buf_size = 6144;
 	val = malloc(buf_size);
 
     	xmlNode *cur_node = NULL;
@@ -65,19 +66,23 @@ print_element_names(xmlNode * a_node)
 		if (cur_node->type == XML_ELEMENT_NODE) {
 	        
 			if (strcmp((char *)cur_node->name, "Name") == 0){
-				name = (char *)xmlNodeGetContent(cur_node); 
+                        	strcpy(name,(char *)xmlNodeGetContent(cur_node));
 				is_name=1;
 			}
 			if (strcmp((char *)cur_node->name, "Address") == 0){              
                         	addr = atoi((char *)xmlNodeGetContent(cur_node));
-                        	is_addr=1;                             
+				is_addr=1;                             
+               		} 
+			if (strcmp((char *)cur_node->name, "AddrIncr") == 0){              
+                        	addrIncr = atoi((char *)xmlNodeGetContent(cur_node));
+				is_addrIncr=1;                             
                		} 
 			if (strcmp((char *)cur_node->name, "Size") == 0){              
                       		len = atoi((char *)xmlNodeGetContent(cur_node)); 
                         	is_len=1;                             
                 	} 
-			if (strcmp((char *)cur_node->name, "Data") == 0){              
-                        	data = (char *)xmlNodeGetContent(cur_node); 
+			if (strcmp((char *)cur_node->name, "Data") == 0){
+                        	strcpy(data,(char *)xmlNodeGetContent(cur_node));
                         	is_data=1;
 				char delimiter[] = ",x ";
 				char *ptr;
@@ -103,12 +108,23 @@ print_element_names(xmlNode * a_node)
                         
                 	} 
 
-			if (is_name&&is_addr&&is_len&&is_data){
+			if (is_name&&is_addr&&is_addrIncr&&is_len&&is_data){
 				is_name=0;
 				is_data=0;
 				is_len=0;
 				is_addr=0;
-				backend_ops->write(addr, len, val);
+				is_addrIncr=0;
+				if (addrIncr==0){
+				    printf("Write %s at addr %d len %d \n",name,addr,len);
+				    backend_ops->write(addr, len, val);
+				} else {
+				    size_t count = 0;
+				    printf("Blockwrite %s at addr %d len %d bs %d\n",name,addr,len,addrIncr);
+				    for(count = 0; count < len; count+=addrIncr){
+					backend_ops->write(addr, addrIncr, val+count);
+					addr++;
+				    }
+				}
 			}   
 	    	}
 
@@ -134,7 +150,7 @@ int main(int argc, char **argv){
     }
 
     int ret = 0;
-    char *i2c[] = {"dsp", "i2c", "/dev/i2c-0", "0x38"};
+    char *i2c[] = {"dsp", "i2c", "/dev/i2c-1", "0x34"};
 
     backend_ops = &i2c_backend_ops;
     if (backend_ops->open) {

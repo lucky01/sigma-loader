@@ -59,6 +59,7 @@ print_element_names(xmlNode * a_node)
 	size_t buf_size;
 	buf_size = 6144;
 	val = malloc(buf_size);
+	int ret = 0;
 
     	xmlNode *cur_node = NULL;
 
@@ -116,13 +117,21 @@ print_element_names(xmlNode * a_node)
 				is_addrIncr=0;
 				if (addrIncr==0){
 				    printf("Write %s at addr %d len %d \n",name,addr,len);
-				    backend_ops->write(addr, len, val);
+				    ret = backend_ops->write(addr, len, val);
+				    if (ret == -1){
+						printf("Failed.\n");
+						exit(1);
+				    }
 				} else {
 				    size_t count = 0;
 				    printf("Blockwrite %s at addr %d len %d bs %d\n",name,addr,len,addrIncr);
 				    for(count = 0; count < len; count+=addrIncr){
-					backend_ops->write(addr, addrIncr, val+count);
-					addr++;
+					ret = backend_ops->write(addr, addrIncr, val+count);
+					if (ret == -1){
+					    printf("Failed.\n");
+					    exit(1);
+					}
+				    addr++;
 				    }
 				}
 			}   
